@@ -1,77 +1,115 @@
-const API_URL = 'https://fsa-crud-2aa9294fe819.herokuapp.com/api/2109-CPU-RM-WEB-PT/events';
+const COHORT = "2309-FTB-ET-WEB-PT";
+const API = "https://fsa-crud-2aa9294fe819.herokuapp.com/api/" + COHORT;
 
-document.addEventListener('DOMContentLoaded', function () {
-  const partyForm = document.getElementById('partyForm');
-  const partyList = document.getElementById('partyList');
+const state = {
+  events: [],
+  event: null,
+  guests: [],
+  rsvps: [],
+};
 
-  fetchParties();
+const $eventList = document.querySelector("#eventList");
+const $eventDetails = document.querySelector("#eventDetails");
+const $guests = document.querySelector("#guests");
+const $guestList = document.querySelector("#guestList");
 
-  partyForm.addEventListener('submit', function (event) {
-    event.preventDefault();
+window.addEventListener("hashchange", selectEvent);
 
-    const partyData = {
-      name: document.getElementById('name').value,
-      date: document.getElementById('date').value,
-      time: document.getElementById('time').value,
-      location: document.getElementById('location').value,
-      description: document.getElementById('description').value,
-    };
+async function render() {
+  await getEvents();
+  await getGuests();
+  await getRsvps();
 
-    addParty(partyData);
+  renderEvents();
+  selectEvent();
+}
 
-    partyForm.reset();
-  });
+render();
 
-  function fetchParties() {
-    fetch(`${API_URL}/parties`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`Request failed with status: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(parties => {
-        parties.forEach(party => {
-          appendParty(party);
-        });
-      })
-      .catch(error => console.error('Error fetching parties:', error.message));
+function selectEvent() {
+  getEventFromHash();
+  renderEventDetails();
+}
+
+function getEventFromHash() {
+  const id = window.location.hash.slice(1);
+  state.event = state.events.find((event) => event.id === +id);
+}
+
+async function getGuests() {
+  try {
+    const response = await fetch(API + "/guests");
+    const json = await response.json();
+    state.guests = json.data;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+
+function renderGuests() {
+  $guests.hidden = false;
+
+  const rsvps = state.rsvps.filter((rsvp) => rsvp.eventId === state.event.id);
+  const guestIds = rsvps.map((rsvp) => rsvp.guestId);
+  const guests = state.guests.filter((guest) => guestIds.includes(guest.id));
+
+  $guestList.innerHTML = "<li>No guests yet!</li>";
+}
+
+async function getEvents() {
+  try {
+    const response = await fetch(API + "/events");
+    const json = await response.json();
+    state.events = json.data;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function getRsvps() {
+  try {
+    const response = await fetch(API + "/rsvps");
+    const json = await response.json();
+    state.rsvps = json.data;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function renderEvents() {
+  const events = state.events.map(renderEvent);
+  $eventList.replaceChildren(...events);
+}
+
+function renderEvent(event) {
+  const article = document.createElement("article");
+  const date = event.date.slice(0, 10);
+
+  article.innerHTML = `
+    <h3><a href="#${event.id}">${event.name} #${event.id}</a></h3>
+    <time datetime="${date}">${date}</time>
+    <address>${event.location}</address>
+  `;
+
+  return article;
+}
+
+function renderEventDetails() {
+  if (!state.event) {
+    $eventDetails.innerHTML = "<p>Select an event to see more.</p>";
+    $guests.hidden = true;
+    return;
   }
 
-  function addParty(partyData) {
-    fetch(`${API_URL}/parties`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(partyData),
-    })
-      .then(response => response.json())
-      .then(newParty => {
-        console.log('Server response for adding party:', newParty);
-        appendParty(newParty);
-      })
-      .catch(error => console.error('Error adding party:', error));
-  }
-  
+  const date = state.event.date.slice(0, 10);
 
-  function appendParty(party) {
-    const listItem = document.createElement('li');
-    listItem.innerHTML = `
-      <strong>${party.name}</strong> - ${party.date}, ${party.time}, ${party.location}, ${party.description}
-      <button data-id="${party.id}" class="deleteButton">Delete</button>
-    `;
-    partyList.appendChild(listItem);
+  $eventDetails.innerHTML = `
+    <h2>${state.event.name} #${state.event.id}</h2>
+    <time datetime="${date}">${date}</time>
+    <address>${state.event.location}</address>
+    <p>${state.event.description}</p>
+  `;
 
-    const deleteButton = listItem.querySelector('.deleteButton');
-    deleteButton.addEventListener('click', function () {
-      fetch(`${API_URL}/parties/${party.id}`, {
-        method: 'DELETE',
-      })
-        .then(() => {
-          listItem.remove();
-        })
-        .catch(error => console.error('Error deleting party:', error));
-    });
-  }
-});
+  renderGuests();
+}
